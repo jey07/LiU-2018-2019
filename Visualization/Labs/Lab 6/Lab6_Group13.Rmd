@@ -1,0 +1,534 @@
+---
+title: "Lab 6-Group13"
+author: "Prudhvi Pedmallu  (prepu690) , Naveen Gabriel (navga709)"
+date: "17 October 2018"
+output: 
+    html_document:
+      code_folding: hide 
+---
+
+#Assignment 1
+
+<br>
+<br>
+
+###1. Plot and analyse the network
++ Bombing group and non bombing group is seperated in clusters identified by red and blue respectively
++ Bombing group clusters includes "Jamal Zougam" and "Mohammad Chaoui"
++ Non-bombing group has cluster which includes "Imad Din Barakat" and "Seeman Gabi Eid"
+```{r ques1,message=FALSE, warning=FALSE}
+library(visNetwork)
+library(tidyverse)
+library(igraph)
+library(plotly)
+library(seriation)
+library(tourr)
+
+
+nodes<-read.table("trainMeta.dat")
+colnames(nodes)<-c("label","group")
+nodes$id<-rownames(nodes)
+nodes<-nodes[,c(3,1,2)]
+nodes$title<-nodes$label
+nodes$color<-ifelse(nodes$group==1,"red","blue")
+nodes<-data.frame(nodes)
+
+
+edges<-read.table("trainData.dat")
+colnames(edges)<-c("from","to","value")
+edges<-data.frame(edges)
+
+#Type- 1(Trust-friendship, 2-(Al Qaeda-Osama),3-Co-participation in training camps and/or wars
+#4-Co-participation in previous terrorist Attacks (Sept 11, Casablanca).
+
+weight_nodes<-graph.data.frame(d=edges,vertices=nodes,directed = F)
+degree_nodes<-degree(weight_nodes,mode="all")
+nodes$value<-degree_nodes[match(nodes$id,names(degree_nodes))]
+
+
+netw<-visNetwork(nodes,edges,width = "100%",height = "800px")%>%
+      visPhysics(solver="repulsion") %>%
+      visOptions(highlightNearest = list(enabled = T,degree=1,
+      hover = T),nodesIdSelection=TRUE,selectedBy = "group") %>%
+      visLayout(randomSeed = 9)
+    
+netw
+```
+
+<br>
+
+###2. Adding degree=2 to the nodes
+*  "Jamal Zougam"
++ This person node is red which imply that he participated in placing the explosives and it has probably the biggest nodes which shows he has extensive connection with many people with ties to friends, Al Qaeda and to Osama Bin Laden. Moreover from the strength of edges it seems he has co-participated inn training camps and/or wars and previous terrorist attacks in Casablanca. He seems to be potential mediator in transferring the information to various poeple .
++ Upon searching the net some interesting informations came out about this person. Zougam, a convicted Moroccan owned a mobile shop in Madrid. In 2001, French authorities suggested that he might have link to Al-Qaeda cell in Spain. His residence was searched by Spanish authorities where it was found that he had a tape of interview with Osama ,as well as phone numbers of known al-Qaeda-linked terrorists.  He was prosecuted for the May 2003 bombings in Casablanca, Morocco. Zougam was questioned, but couldn't prosecute him because of lack of evidence. For his madrid bombing, it seems he was recognized by a eye witness at the scene of attack so he was charged with 190 murders and 14,00 attempted murders. He was sentenced to 42,933 years in prison but it seems  he will serve only 40 years whihc is the maximum sentence that can be srved under Spanish Law.
+
+* "Imad Din Barakat"
+
++ He also has similar node size and network connection like "Jamal Zougam" .
++ From wikipedia, he is a syrian born Spaniard sentenced to 27 year prison in Spain for his involvement in Sep 11 attacks. His life term got reduced to 12 years beacause it seems his conspiracy in the Sep 11 attack was not proven. During 3rd year in his prison , he was accused to have directed opertaions for Madrid bombing from within the prison.
+
+
+```{r ques2, message=FALSE, warning=FALSE}
+visNetwork(nodes,edges,width = "100%",height = "800px")%>%
+      visPhysics(solver="repulsion") %>%
+      visOptions(highlightNearest = list(enabled = T,degree = 2,
+      hover = T),nodesIdSelection=TRUE,selectedBy = "group") %>%
+      visLayout(randomSeed = 9)
+
+```
+
+<br>
+
+###3. Clusters by optimizing edge betweenness
+By optimizing Edge-Betweeness , clusters are much visible than earlier in Step 1 especially a small knitted cluster around "Seeman Gaby Eid". Tight clusters are formed around "Imad Eddin Barakat", "Jamal Zougam" and "Mohammad Choui" . 
+```{r ques3, message=FALSE, warning=FALSE}
+nodes1<-nodes
+ceb<-cluster_edge_betweenness(weight_nodes)
+nodes1$group<-ceb$membership
+visNetwork(nodes1,edges)%>%visIgraphLayout(layout = "layout_nicely")%>%
+          visOptions(highlightNearest = list(enabled = T,degree=1,
+          hover = T),nodesIdSelection=TRUE,selectedBy = "group") 
+
+```
+
+<br>
+
+###4. Heatmap for finding clusters by HC optimizer
+"Jamal Zougam", "Imad Din Barakat" and "Ahmidan" brothers form clusters which seems to be consistent from nodal graph
+```{r ques4, message=FALSE, warning=FALSE}
+adjacenymat<-get.adjacency(weight_nodes,sparse = F)
+colnames(adjacenymat)<-nodes$label
+rownames(adjacenymat)<-nodes$label
+rowdist<-dist(adjacenymat)
+
+row_order<-seriate(rowdist,"HC")
+order1<-get_order(row_order)
+adjacenymat_reordered<-adjacenymat[order1,order1]
+
+plot_ly(z=~adjacenymat_reordered,x=~colnames(adjacenymat_reordered),y=~rownames(adjacenymat_reordered),type="heatmap")%>% layout(title = "Heatmap for finding  clusters by HC optimizer in Madrid Bombing")
+```
+
+<br>
+<br>
+
+#Assignment 2
+
+<br>
+<br>
+
+###1. Bubble motion plot Analysis
+* On few analysis it sees that China and India has similar trend, though the consumption of oil and coal in China seemed to be way more than India. 
+
+* China and US consumption of coal was more than any other country during 1965. For Us, in additon to coal, it consumed oil more than any other conuntry. From 1965-2009, the consumption of coal didn't increase much as compared to Oil for US . For China, from 1965-2009, the consumption of oil and coal increased tremedously. 
+
+* For Uk, Brazil, Japan, France and Germnay the overall consumption of Coal and Oil has been low. One of the reason may be due the fact that during 1965, the population was less( Upon a quick check all had population below 100 millon as compared to other country), so the consumption was less. With progress in years they started using nuclear and renewable sources of energy which might be the reason why consumption of oil and Coal hasn't increased much in these Countries.
+```{r message=FALSE, warning=FALSE}
+oilcoal<-read.csv2("Oilcoal.csv",sep=";")
+
+oilcoal$X<-NULL
+
+
+plot_ly(
+    oilcoal,
+    x =  ~ Coal,
+    y =  ~ Oil,
+    frame =  ~ Year,
+    type = "scatter",
+    size = ~ Marker.size*12,
+    mode = "markers",
+    hoverinfo = "text",
+    text = ~Country,
+    color = ~Country,
+    marker = list(
+        opacity =1,
+        line = list(
+        color = 'black',
+        width = 1
+      )
+      )
+    
+    ) %>% animation_opts(300, easing = "cubic", redraw = F)
+
+
+
+```
+
+<br>
+
+###2. Comparison of 2  similar Countries based on motion.
+In 1965 China and India had same amount of Oil consumption but China coal consumption was higher than India. During 1990-2000 china dependence on Coal became less as compared to Oil but post 2000 the coal and oil consumption sky rocketed in China. India followed the similar trend as China but the scale of consumption was much less .  Below were the reasons I found on the motion chart.
+
++ China is the most populous country in the world so it consumption would naturally be high. Moroever, China has lot of Coal. It seems the coal is very cheap in China. Since it is cheap, it will be used as main source to generate power. Moreover, China wass one of the fast developing economy which means tis oil and Coal consumption was always higher.
+
++ India has less supply to its required demand for Oil and coal. Most of the India in 1965 and onwards depended on woods and other sources to run houses. With time, the consumption of oil and coal did increased but India looked for other sources of energy as well like Solar and Wind energy.
+```{r message=FALSE, warning=FALSE}
+plot_ly(
+    oilcoal[oilcoal$Country=="India" |oilcoal$Country=="China",],
+    x =  ~ Coal,
+    y =  ~ Oil,
+    frame =  ~ Year,
+    type = "scatter",
+    size = ~ Marker.size*12,
+    mode = "markers",
+    hoverinfo = "text",
+    text = ~Country,
+    color = ~Country,
+    marker = list(
+        opacity =1,
+        line = list(
+        color = 'black',
+        width = 1
+      )
+      )
+    
+    ) %>% animation_opts(300, easing = "cubic", redraw = F)
+
+
+
+```
+
+<br>
+
+###3. Animated Bar plot 
+* Animated Bar plot shows much clearer picture than Bubble chart. It is easy to compare between different countries beacause the bar plot doesn't move around. In motion bubble chart, the bubble positioning are all over the chart which might pose difficulty in comparing the various factor.
+
+* Animated Bar chart, in this case , shows the relative consumption of Oil to its toal consumption which might lead into false image . For example- form bar plot, it might seem that China is consuming less oil than other countries but it is not true as we have seen in bubble chart that China consumption of Oil was way more higher than other countries.
+```{r message=FALSE, warning=FALSE}
+
+x<-oilcoal%>%group_by(Year,Country)%>%mutate(Proportions=0)
+z<-oilcoal%>%group_by(Year,Country)%>%mutate(Proportions=(Oil/(Oil+Coal))*100)
+new_bargraph<-rbind(x,z)
+
+
+new_bargraph%>% plot_ly(
+    x =  ~ Proportions,
+    y =  ~ Country,
+    frame =  ~ Year,
+    type = "scatter",
+    mode = "lines",
+    color = ~Country,
+    line = list(width = 20)
+    ) %>% animation_opts(300, easing="cubic",redraw=F)
+
+
+```
+
+<br>
+
+###4. Elastic Transition
++ Advantages- For long range of values it can be usefull as the sudden jump might be required to show the next value in the given time frame.
+
+ 
++ Disadvantages- For short range of jump, it might project inconvenience as elastic transtion bounces when the target value is reached. A series of small jump with bounce wouldn't allow user to easily focus on the values and might pose some discomfort.
+```{r message=FALSE, warning=FALSE}
+new_bargraph%>% plot_ly(
+    x =  ~ Proportions,
+    y =  ~ Country,
+    frame =  ~ Year,
+    type = "scatter",
+    mode = "lines",
+    color = ~Country,
+    line = list(width = 20)
+    ) %>% animation_opts(300, easing="elastic",redraw=F)
+```
+
+
+###5. Guided Projections
+
+In the guided projections,China and Brazil seems to have more effect. Yes, the cluster do corresponds to different year ranges. 
+```{r message=FALSE, warning=FALSE}
+
+mat <- read.csv2("Oilcoal.csv",sep=";")
+mat<-mat[,1:3]
+mat <- mat %>%spread(Country, Coal)
+mat_scaled <- rescale(mat[,2:9])
+
+rownames(mat_scaled) <- mat[,1]
+
+set.seed(12345)
+#tour <- new_tour(mat, grand_tour(), NULL)
+tour<- new_tour(mat_scaled, guided_tour(cmass), NULL)
+ 
+steps <- c(0, rep(1/15, 200))
+Projs<-lapply(steps, function(step_size){ 
+  step <- tour(step_size)
+  if(is.null(step)) {
+    .GlobalEnv$tour<- new_tour(mat_scaled, guided_tour(cmass), NULL)
+    step <- tour(step_size)
+  }
+  step
+}
+)
+ 
+# projection of each observation
+tour_dat <- function(i) {
+  step <- Projs[[i]]
+  proj <- center(mat_scaled %*% step$proj)
+  data.frame(x = proj[,1], y = proj[,2], state = rownames(mat_scaled))
+}
+ 
+# projection of each variable's axis
+proj_dat <- function(i) {
+  step <- Projs[[i]]
+  data.frame(
+    x = step$proj[,1], y = step$proj[,2], variable = colnames(mat_scaled)
+  )
+}
+ 
+stepz <- cumsum(steps)
+ 
+# tidy version of tour data
+ 
+tour_dats <- lapply(1:length(steps), tour_dat)
+tour_datz <- Map(function(x, y) cbind(x, step = y), tour_dats, stepz)
+tour_dat <- dplyr::bind_rows(tour_datz)
+ 
+# tidy version of tour projection data
+proj_dats <- lapply(1:length(steps), proj_dat)
+proj_datz <- Map(function(x, y) cbind(x, step = y), proj_dats, stepz)
+proj_dat <- dplyr::bind_rows(proj_datz)
+ 
+ax <- list(
+  title = "", showticklabels = FALSE,
+  zeroline = FALSE, showgrid = FALSE,
+  range = c(-1.1, 1.1)
+)
+ 
+# for nicely formatted slider labels
+options(digits = 3)
+tour_dat <- highlight_key(tour_dat, ~state, group = "A")
+tour <- proj_dat %>%
+  plot_ly(x = ~x, y = ~y, frame = ~step, color = I("black")) %>%
+  add_segments(xend = 0, yend = 0, color = I("gray80")) %>%
+  add_text(text = ~variable) %>%
+  add_markers(data = tour_dat, text = ~state, ids = ~state, hoverinfo = "text") %>%
+  layout(xaxis = ax, yaxis = ax,title="Animated guided tour of Coal consumption per Country")
+tour
+```
+
+
+
+
+
+#Appendix
+
+###Assignment 1
+```{r eval=FALSE}
+library(visNetwork)
+library(tidyverse)
+library(igraph)
+library(plotly)
+library(seriation)
+library(tourr)
+
+
+nodes<-read.table("trainMeta.dat")
+colnames(nodes)<-c("label","group")
+nodes$id<-rownames(nodes)
+nodes<-nodes[,c(3,1,2)]
+nodes$title<-nodes$label
+nodes$color<-ifelse(nodes$group==1,"red","blue")
+nodes<-data.frame(nodes)
+
+
+edges<-read.table("trainData.dat")
+colnames(edges)<-c("from","to","value")
+edges<-data.frame(edges)
+
+#Type- 1(Trust-friendship, 2-(Al Qaeda-Osama),3-Co-participation in training camps and/or wars
+#4-Co-participation in previous terrorist Attacks (Sept 11, Casablanca).
+
+weight_nodes<-graph.data.frame(d=edges,vertices=nodes,directed = F)
+degree_nodes<-degree(weight_nodes,mode="all")
+nodes$value<-degree_nodes[match(nodes$id,names(degree_nodes))]
+
+
+netw<-visNetwork(nodes,edges,width = "100%",height = "800px")%>%
+      visPhysics(solver="repulsion") %>%
+      visOptions(highlightNearest = list(enabled = T,degree=1,
+      hover = T),nodesIdSelection=TRUE,selectedBy = "group") %>%
+      visLayout(randomSeed = 9)
+    
+netw
+
+visNetwork(nodes,edges,width = "100%",height = "800px")%>%
+      visPhysics(solver="repulsion") %>%
+      visOptions(highlightNearest = list(enabled = T,degree = 2,
+      hover = T),nodesIdSelection=TRUE,selectedBy = "group") %>%
+      visLayout(randomSeed = 9)
+
+
+
+nodes1<-nodes
+ceb<-cluster_edge_betweenness(weight_nodes)
+nodes1$group<-ceb$membership
+visNetwork(nodes1,edges)%>%visIgraphLayout(layout = "layout_nicely")%>%
+          visOptions(highlightNearest = list(enabled = T,degree=1,
+          hover = T),nodesIdSelection=TRUE,selectedBy = "group") 
+
+
+
+
+adjacenymat<-get.adjacency(weight_nodes,sparse = F)
+colnames(adjacenymat)<-nodes$label
+rownames(adjacenymat)<-nodes$label
+rowdist<-dist(adjacenymat)
+
+row_order<-seriate(rowdist,"HC")
+order1<-get_order(row_order)
+adjacenymat_reordered<-adjacenymat[order1,order1]
+
+plot_ly(z=~adjacenymat_reordered,x=~colnames(adjacenymat_reordered),y=~rownames(adjacenymat_reordered),type="heatmap")%>% layout(title = "Heatmap for finding  clusters by HC optimizer in Madrid Bombing")
+```
+
+###Assignment 2
+```{r eval=FALSE}
+
+oilcoal<-read.csv2("Oilcoal.csv",sep=";")
+
+oilcoal$X<-NULL
+
+
+plot_ly(
+    oilcoal,
+    x =  ~ Coal,
+    y =  ~ Oil,
+    frame =  ~ Year,
+    type = "scatter",
+    size = ~ Marker.size*12,
+    mode = "markers",
+    hoverinfo = "text",
+    text = ~Country,
+    color = ~Country,
+    marker = list(
+        opacity =1,
+        line = list(
+        color = 'black',
+        width = 1
+      )
+      )
+    
+    ) %>% animation_opts(300, easing = "cubic", redraw = F)
+
+
+plot_ly(
+    oilcoal[oilcoal$Country=="India" |oilcoal$Country=="China",],
+    x =  ~ Coal,
+    y =  ~ Oil,
+    frame =  ~ Year,
+    type = "scatter",
+    size = ~ Marker.size*12,
+    mode = "markers",
+    hoverinfo = "text",
+    text = ~Country,
+    color = ~Country,
+    marker = list(
+        opacity =1,
+        line = list(
+        color = 'black',
+        width = 1
+      )
+      )
+    
+    ) %>% animation_opts(300, easing = "cubic", redraw = F)
+
+
+
+
+x<-oilcoal%>%group_by(Year,Country)%>%mutate(Proportions=0)
+z<-oilcoal%>%group_by(Year,Country)%>%mutate(Proportions=(Oil/(Oil+Coal))*100)
+new_bargraph<-rbind(x,z)
+
+
+new_bargraph%>% plot_ly(
+    x =  ~ Proportions,
+    y =  ~ Country,
+    frame =  ~ Year,
+    type = "scatter",
+    mode = "lines",
+    color = ~Country,
+    line = list(width = 20)
+    ) %>% animation_opts(300, easing="cubic",redraw=F)
+
+
+
+new_bargraph%>% plot_ly(
+    x =  ~ Proportions,
+    y =  ~ Country,
+    frame =  ~ Year,
+    type = "scatter",
+    mode = "lines",
+    color = ~Country,
+    line = list(width = 20)
+    ) %>% animation_opts(300, easing="elastic",redraw=F)
+
+
+
+mat <- read.csv2("Oilcoal.csv",sep=";")
+mat<-mat[,1:3]
+mat <- mat %>%spread(Country, Coal)
+mat_scaled <- rescale(mat[,2:9])
+
+rownames(mat_scaled) <- mat[,1]
+
+set.seed(12345)
+#tour <- new_tour(mat, grand_tour(), NULL)
+tour<- new_tour(mat_scaled, guided_tour(cmass), NULL)
+ 
+steps <- c(0, rep(1/15, 200))
+Projs<-lapply(steps, function(step_size){ 
+  step <- tour(step_size)
+  if(is.null(step)) {
+    .GlobalEnv$tour<- new_tour(mat_scaled, guided_tour(cmass), NULL)
+    step <- tour(step_size)
+  }
+  step
+}
+)
+ 
+# projection of each observation
+tour_dat <- function(i) {
+  step <- Projs[[i]]
+  proj <- center(mat_scaled %*% step$proj)
+  data.frame(x = proj[,1], y = proj[,2], state = rownames(mat_scaled))
+}
+ 
+# projection of each variable's axis
+proj_dat <- function(i) {
+  step <- Projs[[i]]
+  data.frame(
+    x = step$proj[,1], y = step$proj[,2], variable = colnames(mat_scaled)
+  )
+}
+ 
+stepz <- cumsum(steps)
+ 
+# tidy version of tour data
+ 
+tour_dats <- lapply(1:length(steps), tour_dat)
+tour_datz <- Map(function(x, y) cbind(x, step = y), tour_dats, stepz)
+tour_dat <- dplyr::bind_rows(tour_datz)
+ 
+# tidy version of tour projection data
+proj_dats <- lapply(1:length(steps), proj_dat)
+proj_datz <- Map(function(x, y) cbind(x, step = y), proj_dats, stepz)
+proj_dat <- dplyr::bind_rows(proj_datz)
+ 
+ax <- list(
+  title = "", showticklabels = FALSE,
+  zeroline = FALSE, showgrid = FALSE,
+  range = c(-1.1, 1.1)
+)
+ 
+# for nicely formatted slider labels
+options(digits = 3)
+tour_dat <- highlight_key(tour_dat, ~state, group = "A")
+tour <- proj_dat %>%
+  plot_ly(x = ~x, y = ~y, frame = ~step, color = I("black")) %>%
+  add_segments(xend = 0, yend = 0, color = I("gray80")) %>%
+  add_text(text = ~variable) %>%
+  add_markers(data = tour_dat, text = ~state, ids = ~state, hoverinfo = "text") %>%
+  layout(xaxis = ax, yaxis = ax,title="Animated guided tour of Coal consumption per Country")
+tour
+```
+

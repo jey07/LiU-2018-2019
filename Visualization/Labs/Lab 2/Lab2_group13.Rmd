@@ -1,0 +1,328 @@
+---
+title: "Lab2_Group13"
+author: "Prudhvi Pedmallu  (prepu690) , Naveen Gabriel (navga709)"
+date: "18 September 2018"
+output:
+  html_document:
+    code_folding: hide
+fontsize: 11pt
+---
+
+
+<br>
+<br>
+
+#Assignment 1
+
+<br>
+
+```{r library, message=FALSE, warning=FALSE,cache=TRUE}
+library(tidyverse)
+library(readxl)
+library(plotly)
+library(MASS)
+library(ggplot2)
+library(gridExtra)
+
+```
+
+
+###1
+
+In graph-1,since the  scale is color continious it is very difficult to distinguish between the boundaries. When we take color parameter the user can correctely classify 3.1 bits of hue but only 2.3 bits for brightness, here the hue is same hence the channel capacity for detection is less. 
+In graph-2, it is easy to notice boundaries by seeing with different colours and clustering.
+```{r question1,message=FALSE, warning=FALSE,cache=TRUE}
+z<-read.csv("olive.csv")
+cls<-cut_interval(z$linolenic, n = 4)
+ggplot(z, aes(palmitic, oleic, color  = linolenic)) + geom_point()
+ggplot(z, aes(palmitic, oleic, color  = factor(cls))) + geom_point() 
+```
+
+<br>
+
+###2
+
+In graph-1, It is easy to notice boundaries which are seperated using colour. Channel capacity is 3.1 bits for colour and 2.3 for brightness.
+In graph-2, In this graph were we mapped discretized linolenic to size. Here we can get an over plotted graph where distinction of boundaries is very difficult.
+In graph-3, Orientation angle is not a preattentive feature and hence it is difficult to analyze this map.
+```{r question2,message=FALSE, warning=FALSE,cache=TRUE }
+ggplot(z, aes(palmitic, oleic, color  = factor(cls))) + geom_point() 
+ggplot(z, aes(palmitic, oleic, size  = factor(cls))) + geom_point() 
+ggplot(z, aes(palmitic, oleic )) + geom_spoke(aes(angle = as.numeric(cls)), radius = 30)
+```
+
+<br>
+
+##3
+
+In graph-1, Even though the color is a preattentive feature in this graph we have a continous color scale of a single hue. But in graph-2,we have different hues hence differentation of boundaries is more easier compare to  first graph.IN graph-1 the channel capacity is 2.3 bits were as in graph-2 it is 3.1 bits.
+
+```{r message=FALSE, warning=FALSE,cache=TRUE}
+ggplot(z, aes(oleic, eicosenoic, color = Region)) + geom_point()
+ggplot(z, aes(oleic, eicosenoic, color  = factor(Region))) + geom_point()
+```
+
+<br>
+
+##4
+
+In graph it is difficult to analyze the information because, so much of information is over loaded by giving the shape, color and size at a time. Even though all these features are preattentive combination of these features is not enabling us to increase the amount of information also it reduces the ease with which individual features can be identified.
+
+```{r message=TRUE, warning=FALSE,cache=TRUE}
+clss<-cut_interval(z$linoleic, n = 3)
+cls1<-cut_interval(z$palmitic, n = 3)
+cls2<-cut_interval(z$palmitoleic, n = 3)
+
+ggplot(z, aes(oleic, eicosenoic, color  = factor(clss), shape = factor(cls1), size = factor(cls2))) + geom_point()
+```
+
+<br>
+
+##5
+According to Treisman theory of feature integration color orentation and intensity are automatically identified by human eye as feature search. So, in this graph we can distinguish between boundaries easily as it is defined by color.
+
+```{r message=FALSE, warning=FALSE,cache=TRUE}
+ggplot(z, aes(oleic, eicosenoic, color = factor(Region), shape = factor(cls1), size = factor(cls2))) + geom_point()
+```
+
+
+<br>
+
+##6
+
+In below pie chart after hiding the lables we cannot distinguish data. At a glance it is difficult to differentiate between some pie. Better than pie would have been a bar chart. 
+
+```{r question6, echo=TRUE, warning=FALSE,cache=TRUE}
+p<-plot_ly(z, labels = ~(z$Area), type = 'pie',textinfo='none') %>%
+  layout(title = ' Proportions of oils coming from different areas', 
+          xaxis = list(showgrid = FALSE, zeroline = FALSE,showticklabels = FALSE),
+          yaxis = list(showgrid = FALSE, zeroline = FALSE,showticklabels = FALSE)) 
+p
+```
+
+<br>
+
+##7
+
+In scatter plot we can find the clusters easily in distinct areas and in  2d density plot it seems to be continious and can see some dense areas it difficult to interpretive contour plots.
+
+
+```{r question7, warning=FALSE,cache=TRUE}
+ggplot(z, aes(linoleic, eicosenoic)) + geom_point()
+
+ggplot(z,aes(linoleic, eicosenoic)) + geom_density2d() 
+
+```
+
+
+<br>
+<br>
+<br>
+
+
+#Assignment 2
+
+```{r readfile, message=FALSE, warning=FALSE,cache=TRUE}
+
+#Reading the baseball dataset
+baseball<-read_excel("baseball-2016.xlsx")
+```
+
+###1. Scaling the data
+
+On plotting the density of baseball dataset it can be seen the the variables are not scaled as bumps at various range of values are evident. Before MDS we need to scale down the values. After scaling down the variables, through density plot it is evident that all the variables are scaled to a uniform range. MDS can be performed on it now.
+```{r scaleddown, message=FALSE, warning=FALSE,cache=TRUE}
+#Plotting  the dataset to check range of values
+plot(density(as.matrix(baseball[,3:ncol(baseball)])),main="Density Plot of Quanitative variables(Before Scaling)")
+baseballscaled=scale(baseball[,3:ncol(baseball)])
+#Replotting after scaling
+plot(density(baseballscaled),main="Density Plot of Quanitative variables(After Scaling)")
+
+```
+
+<br>
+
+###2. Non Metric MDS
+Using Kruskal Non MDS, the baseball dataset variables are reduced to 2 component-V1 and V2. V1 and V2 are along the x and y axis respectiverly. From the graph, AL is more aligned to Y axis than NL. Moroever NL as compared to AL is more spread out so more than V1, V2 component seems to able to differentiate AL vs NL. Furthermore, it seems Boston Red Sox ,Philadephia Philies,Atlanata Braves are outliers. 
+```{r mdsplot, message=FALSE, warning=FALSE,cache=TRUE}
+#Calculating the distance between different attributes and reducing tthe dimension of
+#24 quantitative variables to 2 variables using Kruskal MDS
+d<-dist(baseballscaled,method="minkowski",p=2)
+res<-isoMDS(d,k=2,maxit=50)
+
+baseballreduced<-res$points
+baseballreduced1<-as.data.frame(baseballreduced)
+baseballreduced1<-cbind(baseball[,1:2],baseballreduced1)
+
+#Plotting the scatterplot of reduced 2 variable dimension , colored by third variable(League)
+plot_ly(data=baseballreduced1,type="scatter",x=~V1,y=~V2,color=~League,hovertext=~Team,colors=c("#ff0509","#5b47ad"))
+```
+
+###3. Shephard Plot
+The shepard plot is linear and the points are nearby to the line . MDS seems to be successfull.Minnesota Twins and Arizona Diamondbacks, Oakland Athletics and Milwaukee Brewers were hardest to plot.
+
+```{r shepard, message=FALSE, warning=FALSE,cache=TRUE}
+sh <- Shepard(d, baseballreduced)
+delta <-as.numeric(d)
+D<- as.numeric(dist(baseballreduced))
+
+n=nrow(baseballreduced)
+index=matrix(1:n, nrow=n, ncol=n)
+index1=as.numeric(index[lower.tri(index)])
+
+n=nrow(baseballreduced)
+index=matrix(1:n, nrow=n, ncol=n, byrow = T)
+index2=as.numeric(index[lower.tri(index)])
+
+
+plot_ly()%>%
+    add_markers(x=~delta, y=~D, hoverinfo = 'text',
+                text = ~paste('Obj1: ', rownames(baseball)[index1],
+                              '<br> Obj 2: ', rownames(baseball)[index2]))%>%
+    #if nonmetric MDS inolved
+    add_lines(x=~sh$x, y=~sh$yf)
+```
+
+
+###4. Correlation between V2 and other variables
+
+On plotting V2 with rest of the variable , visually it seems there is a strong correlation with HR(Home Run) and HR per game(Home run per game). Both variables are important in deciding the win factor of a team. A home run occurs when a batter hits a fair ball and scores on the play without being put out or without the benefit of an error. HR and HR/ game can be a good measure of evaluating hitter strength and the mroe HR/ game might reveal the team with strong hitter.
+```{r plotbest, message=FALSE, warning=FALSE, cache=TRUE, include=FALSE}
+baseballnew<-cbind(baseballreduced1,baseball[,3:ncol(baseball)])
+
+plotmodel<-function(x,y)
+{
+    plt<- ggplot(baseballnew, aes_string(x,y,color="League"))+ geom_point()
+    return(plt)
+}
+colnames(baseballnew)[colnames(baseballnew)=="2B"] <- "Doubles"
+colnames(baseballnew)[colnames(baseballnew)=="3B"] <- "Triples"
+
+plt1<-list()
+plt1<-lapply(colnames(baseballnew)[5:ncol(baseball)],
+             function(x) plotmodel(colnames(baseballreduced1)[4],x))
+
+grid.arrange(grobs=plt1)
+```
+
+Scatterplot of HR vs V2.
+
+```{r ggplotnew, message=FALSE, warning=FALSE,cache=TRUE}
+ggplot(baseballnew, aes_string("V2","HR",color="League"))+ geom_point() + ggtitle("HR vs V2")
+ggplot(baseballnew, aes_string("V2","HR.per.game",color="League"))+ geom_point() + ggtitle("HR per game vs V2")
+```
+
+
+<br>
+<br>
+<br>
+
+### Appendix
+
+
+```{r app2,eval=FALSE}
+
+library(tidyverse)
+library(readxl)
+library(plotly)
+library(MASS)
+library(ggplot2)
+library(gridExtra)
+
+z<-read.csv("olive.csv")
+cls<-cut_interval(z$linolenic, n = 4)
+ggplot(z, aes(palmitic, oleic, color  = linolenic)) + geom_point()
+ggplot(z, aes(palmitic, oleic, color  = factor(cls))) + geom_point() 
+
+ggplot(z, aes(palmitic, oleic, color  = factor(cls))) + geom_point() 
+ggplot(z, aes(palmitic, oleic, size  = factor(cls))) + geom_point() 
+ggplot(z, aes(palmitic, oleic )) + geom_spoke(aes(angle = as.numeric(cls)), radius = 30)
+
+ggplot(z, aes(oleic, eicosenoic, color = Region)) + geom_point()
+ggplot(z, aes(oleic, eicosenoic, color  = factor(Region))) + geom_point()
+
+clss<-cut_interval(z$linoleic, n = 3)
+cls1<-cut_interval(z$palmitic, n = 3)
+cls2<-cut_interval(z$palmitoleic, n = 3)
+
+ggplot(z, aes(oleic, eicosenoic, color  = factor(clss), shape = factor(cls1), size = factor(cls2))) + geom_point()
+
+ggplot(z, aes(oleic, eicosenoic, color = factor(Region), shape = factor(cls1), size = factor(cls2))) + geom_point()
+
+p<-plot_ly(z, labels = ~(z$Area), type = 'pie',textinfo='none') %>%
+  layout(title = ' Proportions of oils coming from different areas', 
+          xaxis = list(showgrid = FALSE, zeroline = FALSE,showticklabels = FALSE),
+          yaxis = list(showgrid = FALSE, zeroline = FALSE,showticklabels = FALSE)) 
+p
+
+ggplot(z, aes(linoleic, eicosenoic)) + geom_point()
+ggplot(z,aes(linoleic, eicosenoic)) + geom_density2d() 
+
+
+#Reading the baseball dataset
+baseball<-read_excel("baseball-2016.xlsx")
+
+#Plotting  the dataset to check range of values
+plot(density(as.matrix(baseball[,3:ncol(baseball)])),main="Density Plot of Quanitative variables(Before Scaling)")
+baseballscaled=scale(baseball[,3:ncol(baseball)])
+#Replotting after scaling
+plot(density(baseballscaled),main="Density Plot of Quanitative variables(After Scaling)")
+
+#Calculating the distance between different attributes and reducing tthe dimension of
+#24 quantitative variables to 2 variables using Kruskal MDS
+d<-dist(baseballscaled,method="minkowski",p=2)
+res<-isoMDS(d,k=2,maxit=50)
+
+baseballreduced<-res$points
+baseballreduced1<-as.data.frame(baseballreduced)
+baseballreduced1<-cbind(baseball[,1:2],baseballreduced1)
+
+#Plotting the scatterplot of reduced 2 variable dimension , colored by third variable(League)
+plot_ly(data=baseballreduced1,type="scatter",x=~V1,y=~V2,color=~League,hovertext=~Team,
+        colors=c("#ff0509","#5b47ad"))
+
+
+
+sh <- Shepard(d, baseballreduced)
+delta <-as.numeric(d)
+D<- as.numeric(dist(baseballreduced))
+
+n=nrow(baseballreduced)
+index=matrix(1:n, nrow=n, ncol=n)
+index1=as.numeric(index[lower.tri(index)])
+
+
+n=nrow(baseballreduced)
+index=matrix(1:n, nrow=n, ncol=n, byrow = T)
+index2=as.numeric(index[lower.tri(index)])
+
+
+plot_ly()%>%
+    add_markers(x=~delta, y=~D, hoverinfo = 'text',
+                text = ~paste('Obj1: ', rownames(baseball)[index1],
+                              '<br> Obj 2: ', rownames(baseball)[index2]))%>%
+    #if nonmetric MDS inolved
+    add_lines(x=~sh$x, y=~sh$yf)
+
+baseballnew<-cbind(baseballreduced1,baseball[,3:ncol(baseball)])
+
+
+plotmodel<-function(x,y)
+{
+    plt<- ggplot(baseballnew, aes_string(x,y,color="League"))+ geom_point()
+    return(plt)
+}
+colnames(baseballnew)[colnames(baseballnew)=="2B"] <- "Doubles"
+colnames(baseballnew)[colnames(baseballnew)=="3B"] <- "Triples"
+
+plt1<-list()
+plt1<-lapply(colnames(baseballnew)[5:ncol(baseball)],
+             function(x) plotmodel(colnames(baseballreduced1)[4],x))
+
+#grid.arrange(grobs=plt1)
+
+
+ggplot(baseballnew, aes_string("V1","OPS",color="League"))+ geom_point()
+ggplot(baseballnew, aes_string("V1","Runs",color="League"))+ geom_point()
+ggplot(baseballnew, aes_string("V1","Runs.per.game",color="League"))+ geom_point()
+```

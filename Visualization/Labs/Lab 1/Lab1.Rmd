@@ -1,0 +1,68 @@
+---
+title: "Lab1"
+author: "Naveen Gabriel"
+date: "26 October 2018"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(gridExtra)
+library(plotly)
+
+computequantile <- function(d){
+    
+    quant<-unname(quantile(d)[c(2,4)])
+
+    max<-quant[2]+(quant[2]-quant[1])*1.5
+    min<-quant[1]-(quant[2]-quant[1])*1.5
+    
+    return(tibble(x=d[d<min|d>max],y=0))
+}
+
+```
+
+```{r}
+plotmodel<-function(df,str,z,lbl){
+    ggplot(df, aes_string(x=str))+stat_density(color="black",fill="lightblue") +
+        geom_point(data=z,aes(x,y),col="red",shape=23,fill="red") +xlab(lbl)
+}
+```
+
+
+```{r}
+senic_table<-read.table("SENIC.txt")
+colnames(senic_table)<-c("ID","Length_of_Stay","Age","Infection_Risk","Routine_Culture_Ratio",
+                        "Routine_Chest","Number_Of_Beds","Medical_School",
+                        "Region", "Avg_Daily_Census","Number_Nurses","Facilities_Services")
+
+
+d=(computequantile(senic_table$Infection_Risk))
+plot_infect<-plotmodel(senic_table,"Infection_Risk",d,"Infection Risk")
+
+plot_infect
+    
+
+```
+
+```{r}
+df<-senic_table[,c(-1,-4,-8,-9)]
+
+plot<-list()
+
+for(i in 1:ncol(df)) {
+    z=(computequantile(df[,i]))
+    plot[[i]]<-plotmodel(df,colnames(df[i]),z)
+}
+
+
+grid.arrange(grobs=c(list(plot_infect),plot),top="Density Plot with outliers")
+```
+
+
+```{r}
+senic_table%>%plot_ly(x=~Infection_Risk,type="histogram",width=1,showlegend=TRUE,name="Histogram",marker=list(line=list(color="black",width=1)))%>%
+    add_markers(x=d[[1]],y=0,name="Outliers",marker=(list(symbol="diamond",size=7)))%>%
+    layout(title="Histogram of Infection Risk",xaxis=list(title="Infection Risk"),yaxis=(list(title="Frequency")))
+```
+
