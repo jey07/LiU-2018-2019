@@ -1,0 +1,281 @@
+---
+title: "Assign1"
+author: "Naveen"
+date: "9 December 2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE)
+```
+
+#Assignment 2
+```{r}
+library(readxl)
+library(tree)
+library(MASS)
+library(e1071)
+library(tree)
+library(fastICA)
+```
+
+
+##1. Importing and Pre-processing credit
+The data is read and divided into training,test and validation dataset in the proportion of 50/25/25 respectively.
+```{r}
+credit<-read_xls("creditscoring.xls")
+
+credit$good_bad<-as.factor(credit$good_bad)
+
+n=dim(credit)[1]
+set.seed(12345)
+id=sample(1:n, floor(n*0.5))
+train_credit=credit[id,]
+
+id1=setdiff(1:n, id)
+set.seed(12345)
+id2=sample(id1, floor(n*0.25))
+valid_credit=credit[id2,]
+
+
+id3=setdiff(id1,id2)
+test_credit=credit[id3,]
+
+comparmat<-matrix(0,nrow=0,ncol=3)
+colnames(comparmat)<-c("Precision","Recall","Accuracy")
+
+```
+
+
+##2. Decision Tree
+
+###1. Deviance as Split measure
+```{r}
+#Split using deviance
+model_fitde<-tree(good_bad~.,data=train_credit,split="deviance")
+
+predict_train<-predict(model_fitde,train_credit,type="class")
+comp_train<-data.frame("Expected"=train_credit$good_bad,"Predicted"=predict_train)
+
+conf_mat<-table(comp_train)
+
+
+missclass_train<-(conf_mat[1,2]+conf_mat[2,1])/nrow(train_credit)
+Precision <- (conf_mat[2,2])/(conf_mat[1,2]+conf_mat[2,2])
+Recall <- (conf_mat[2,2])/(conf_mat[2,1]+conf_mat[2,2])
+Accuracy <- (conf_mat[1,1]+conf_mat[2,2])/nrow(train_credit)
+comparmat<-rbind(comparmat,c(Precision,Recall,Accuracy))
+conf_mat
+missclass_train
+
+```
+
+```{r}
+predict_test<-predict(model_fitde,test_credit,type="class")
+comp_test<-data.frame("Expected"=test_credit$good_bad,"Predicted"=predict_test)
+
+conf_mat<-table(comp_test)
+missclass_test<-sum(conf_mat[1,2]+conf_mat[2,1])/nrow(test_credit)
+
+Precision <- (conf_mat[2,2])/(conf_mat[1,2]+conf_mat[2,2])
+Recall <- (conf_mat[2,2])/(conf_mat[2,1]+conf_mat[2,2])
+Accuracy <- (conf_mat[1,1]+conf_mat[2,2])/nrow(test_credit)
+comparmat<-rbind(comparmat,c(Precision,Recall,Accuracy))
+
+conf_mat
+
+missclass_test
+```
+
+
+###2. Gini as split measure
+```{r}
+#Split using gini
+model_fitgi<-tree(good_bad~.,data=train_credit,split="gini")
+
+predict_train<-predict(model_fitgi,train_credit,type="class")
+comp_train<-data.frame("Expected"=train_credit$good_bad,"Predicted"=predict_train)
+
+conf_mat<-table(comp_train)
+missclass_train<-sum(conf_mat[1,2]+conf_mat[2,1])/nrow(train_credit)
+
+Precision <- (conf_mat[2,2])/(conf_mat[1,2]+conf_mat[2,2])
+Recall <- (conf_mat[2,2])/(conf_mat[2,1]+conf_mat[2,2])
+Accuracy <- (conf_mat[1,1]+conf_mat[2,2])/nrow(train_credit)
+comparmat<-rbind(comparmat,c(Precision,Recall,Accuracy))
+
+conf_mat
+
+missclass_train
+```
+
+
+```{r}
+predict_test<-predict(model_fitgi,test_credit,type="class")
+comp_test<-data.frame("Expected"=test_credit$good_bad,"Predicted"=predict_test)
+
+conf_mat<-table(comp_test)
+missclass_test<-sum(conf_mat[1,2]+conf_mat[2,1])/nrow(test_credit)
+
+Precision <- (conf_mat[2,2])/(conf_mat[1,2]+conf_mat[2,2])
+Recall <- (conf_mat[2,2])/(conf_mat[2,1]+conf_mat[2,2])
+Accuracy <- (conf_mat[1,1]+conf_mat[2,2])/nrow(test_credit)
+comparmat<-rbind(comparmat,c(Precision,Recall,Accuracy))
+
+conf_mat
+missclass_test
+```
+
+From the below table, deviance as a measure of impurity gives better decision tree than gini. So for below steps, I will use deviance as a measure for splitting the trees
+
+```{r}
+rownames(comparmat)<-c("Deviance_Train","Deviance_Test","Gini_Train","Gini_Test")
+comparmat
+```
+
+##3. 
+According to the plot, I chose optimal tree with leaf node as 12 because after 12 even though the training error decreases, the validation error increases.
+```{r}
+trainScore<-c(1:15)
+testScore <- c(1:15)
+for(i in 2:15) {
+    pruned_tree=prune.tree(model_fitde,best=i)
+    predict_tree=predict(pruned_tree, newdata=valid_credit,type="tree")
+    trainScore[i]=deviance(pruned_tree) 
+    testScore[i]=deviance(predict_tree)
+}
+
+pruned_tree_opt  <- prune.tree(model_fitde,best=12) # Got from above 
+predict_tree_opt <- predict(pruned_tree_opt, newdata=valid_credit,type="tree") #for validata
+
+nodes_train_opt <- as.numeric(rownames(pruned_tree_opt$frame))  #getnodes
+nodes_test_opt  <- as.numeric(rownames(predict_tree_opt$frame))
+
+depth_train <-  max(tree:::tree.depth(nodes_train_opt)) #get depth
+depth_valid <-  max(tree:::tree.depth(nodes_test_opt))
+
+{plot(2:15, trainScore[2:15], type="b", col="red",ylim=c(1,600),
+      xlab="Number of Leaf Nodes",ylab="Deviances")
+points(x=c(2:15),y=testScore[2:15], type="b", col="blue")
+title(main="Training vs Validation deviances on pruned trees")
+legend("bottomright",legend=c("Train Data Set", "Validation Data Set"),
+       col=c("red","blue"),lty=1:2, cex=0.8,title="Deviances")}
+
+
+cat("Depth of Optimal Tree for training dataset:",depth_train,"\n")
+cat("Depth of Optimal Tree for training dataset:",depth_valid)
+
+
+{plot(pruned_tree_opt)
+text(pruned_tree_opt,pretty=0)
+title(main="Optimal Tree for Training Data")}
+
+{plot(predict_tree_opt)
+ text(pruned_tree_opt,pretty=0)
+ title(main="Optimal Tree for Validation Data")}
+
+cat("Labels used by training data\n\n",tree:::labels.tree(pruned_tree_opt),"\n\n\n")
+
+cat("Labels used by training data\n\n",
+tree:::labels.tree(predict_tree_opt ),"\n")
+ 
+
+predict_test=predict(pruned_tree_opt, newdata=test_credit,type="tree")
+```
+
+
+4. ##Naive Baiyes
+```{r}
+model_naive <- naiveBayes(good_bad~.,train_credit)
+
+predict_naivetrain<-predict(model_naive,newdata=train_credit)
+comp_train<-data.frame("Expected"=train_credit$good_bad,"Predicted"=predict_naivetrain)
+
+conf_mat<-table(comp_train)
+missclass_train<-sum(conf_mat[1,2]+conf_mat[2,1])/nrow(train_credit)
+missclass_train
+
+conf_mat
+```
+
+Test Data
+```{r}
+predict_naivetest <- predict(model_naive,newdata=test_credit)
+comp_test<-data.frame("Expected"=test_credit$good_bad,"Predicted"=predict_naivetest)
+
+conf_mat<-table(comp_test)
+missclass_test<-sum(conf_mat[1,2]+conf_mat[2,1])/nrow(test_credit)
+missclass_test
+
+conf_mat
+```
+
+
+##5. Optimal tree and the Naïve Bayes model
+
+Naive Bayes
+```{r}
+prob_seq<-seq(0.05,0.95,0.05)
+predntestp <- predict(model_naive,newdata=test_credit,type = "raw")
+
+pred_matrix<-matrix(nrow=0,ncol=length(prob_seq)+1)
+
+
+orig_mat <- ifelse(test_credit$good_bad =="good",1,0)
+for(i in 1:nrow(predntestp)) {
+    pred_matrix<-rbind(pred_matrix,c(orig_mat[i],
+                                     ifelse(predntestp[i,2]>prob_seq,1,0)))
+}
+
+pred_matrix<-as.data.frame(pred_matrix)
+
+colnames(pred_matrix)[1] <- "Original Value"
+for(i in 1:length(prob_seq)) {
+    colnames(pred_matrix)[i+1] <- paste("Probability >",prob_seq[i])
+}
+
+TPR_naive <- apply(pred_matrix[,-1],2,
+                   function(x)(sum(pred_matrix[,1]*x)/sum(pred_matrix[,1])))
+
+FPR_naive <- apply(pred_matrix[,-1],2,
+                   function(x)(sum(x)-
+                                   sum(pred_matrix[,1]*x))/sum(pred_matrix[,1]==0))
+
+plot(x=FPR_naive,y=TPR_naive)
+```
+
+
+Optimal Tree
+```{r}
+pred_treopttes <- predict(pruned_tree_opt, newdata=test_credit,type="tree")
+```
+
+##6. Naive Bayes using Loss Matrix
+Train Data
+```{r}
+loss_mat<-matrix(c(0,1,10,0), byrow=TRUE, nrow=2)
+
+naive_lossmat <- naiveBayes(good_bad~., train_credit,loss=loss_mat)
+
+predict_train<-predict(naive_lossmat,train_credit,type="class")
+comp_train<-data.frame("Expected"=train_credit$good_bad,"Predicted"=predict_train)
+conf_mat<-table(comp_train)
+missclass_train<-sum(conf_mat[1,2]+conf_mat[2,1])/nrow(train_credit)
+missclass_train
+
+conf_mat
+```
+
+Test Data
+```{r}
+predict_naivetest <- predict(naive_lossmat,test_credit)
+comp_test<-data.frame("Expected"=test_credit$good_bad,"Predicted"=predict_naivetest)
+comp_test$Expected<-ifelse(comp_test$Expected==1,"Good","Bad")
+comp_test$Predicted<-ifelse(comp_test$Predicted==1,"Good","Bad")
+
+conf_mat<-table(comp_test)
+missclass_test<-sum(conf_mat[1,2]+conf_mat[2,1])/nrow(test_credit)
+missclass_test
+
+conf_mat
+```

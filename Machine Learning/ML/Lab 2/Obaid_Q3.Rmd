@@ -1,0 +1,275 @@
+---
+title: "Group_A11_Lab2"
+author: "Obaid,Sridhar,Naveen"
+date: "26 November 2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(reshape2)
+library(fastICA)
+library(ggplot2)
+```
+
+# Q3 
+
+## Part 1
+
+```{r,q31, echo=FALSE, message=FALSE, warning=FALSE}
+set.seed(12345)
+
+#Libraries
+library(tree)
+library(ggplot2)
+
+#functions
+plotTree <- function(tree){
+  plot(tree,main="Fitted tree")
+  text(tree, cex=.75)
+}
+
+data <- read.table("State.csv",sep=";",header = TRUE)
+colsNeeded <- c("EX","MET")
+data <- data[colsNeeded]
+data$MET <- gsub(',', '.', data$MET)
+data$MET <- as.numeric(data$MET)
+
+# reorder
+data = data[order(data$MET),]
+
+
+#plot
+plot(EX ~ MET, data = data, pch = 19, cex = 1,col="red", main="EX Vs MET Plot")
+```
+
+As we can see in the above plot, there is high variance among data as the data points are scattered. So linear of polynomial regression will not be a good fit to it. We think, decision trees would be good to fit for this data.
+
+
+## Part 2
+
+#### Selection of tree using cross validation
+```{r, q32,echo=FALSE, message=FALSE, warning=FALSE}
+#part 2
+# fitting tree
+
+
+model <- tree(formula = EX ~ MET,data = data,control =tree.control(nobs = nrow(data),minsize = 8))
+
+cat("\nFitted Tree:")
+plotTree(model)
+
+cvModel <- cv.tree(model)
+plot(cvModel,main="CV Plot: Deviance vs tree Size")
+# Plotting cv tree
+plot(cvModel$size, cvModel$dev, main = "Deviance Vs Size" ,
+     xlab="size", ylab = "deviance", type="b",col="blue", pch= 19,cex=1)
+
+# which size is better?
+bestSize <- cvModel$size[which(cvModel$dev==min(cvModel$dev))] 
+cat("\n Optimal tree:",bestSize)
+```
+
+As see from the CV plot of deviance vs size, the least deviance(174057.6) is at 3, therefore best size is 3.
+
+#### Predictions using best size
+
+```{r,q33, echo=FALSE, message=FALSE, warning=FALSE}
+
+bestTree <- prune.tree(model,best = bestSize)
+
+# predictions
+preds = predict(bestTree,newdata=data)
+
+# plot original and fitted data
+results  <- data.frame(Ind=data$MET,original=data$EX,predicted=preds)
+
+ggplot(results, aes(Ind, y = value, color = variable)) + 
+  geom_point(aes(y = original, col = "original")) + 
+  geom_point(aes(y = predicted, col = "predicted"))+
+  ggtitle("Predicted Vs original using optimal tree of size 3")
+```
+
+### Histogramm of residuals
+
+```{r,q34, echo=FALSE, message=FALSE, warning=FALSE}
+#hsitogram
+resids<- (data$EX - preds)
+hist(resids)
+```
+
+Residuals are not normally distributed and , in generally, models work better with more symmetrical or bell shaped distribution of residuals. This means ,in our case, fitting can be improved.
+
+## Part 3
+
+#### 95% Confidence band (Non-Parametric)
+
+```{r,q35, echo=FALSE, message=FALSE, warning=FALSE}
+#part 3
+library(boot)
+
+bootstrap <- function(data,i){
+  data  <- data[i,]
+ 
+  model <- tree(EX ~ MET, data = data, control = tree.control(nobs = nrow(data),minsize = 8))
+  bestTree <- prune.tree(model,best = bestSize)
+  preds <- predict(bestTree,newdata=data)
+  return(preds)
+}
+bootResults <- boot(data=data,statistic = bootstrap,R=1000)
+
+#resConf = boot.ci(bootResults, type="bca")
+
+confBound <- envelope(bootResults,level = 0.95)
+
+upperLimits <- confBound$point[1,]
+lowerLimits <- confBound$point[2,]
+
+results["upper"] = upperLimits
+results["lower"] = lowerLimits
+
+ggplot(results, aes(Ind,original,predicted,upper,lower))+
+  geom_point(aes(Ind,original),color="red")+
+  geom_point(aes(Ind,predicted),color="blue")+
+  geom_line(aes(Ind,upper),color="green")+
+  geom_line(aes(Ind,lower),color="green")+
+  ggtitle("Confidence bound")
+```
+
+The band is not smooth, instead it is bumpy. The reason being, it is combination of different intervals calculated for different bootstrap iterations.
+
+## Part 4
+
+#### 95% Confidence band (Parametric)
+
+```{r,q36, echo=FALSE, message=FALSE, warning=FALSE}
+# part4, parammetric bootstraping
+
+bootStrapParam <- function(data,index){
+  data <- data[index,]
+  model <- tree(EX ~ MET, data = data, control = tree.control(nobs = nrow(data),minsize = 8))
+  bestTree <- prune.tree(model,best = bestSize)
+  preds <- predict(bestTree,newdata=data)
+  resids <- data$EX - preds
+  # each prediction is an estimation and can be used as mean, 
+  
+  stDev <- sd(resids)
+  preds<- rnorm(nrow(data),preds,stDev)
+  return(preds)
+}
+ranGenFunc <- function(data,model){
+  data$EX = rnorm(nrow(data), predict(model,newdata=data),sd(resid(model)))
+  return(data)
+}
+bootResults <- boot(data,statistic = bootStrapParam , R=1000, mle=bestTree,sim="parametric",ran.gen = ranGenFunc)
+confBound <- envelope(bootResults,level = 0.95)
+
+upperLimits <- confBound$point[1,]
+lowerLimits <- confBound$point[2,]
+
+results["upperP"] = upperLimits
+results["lowerP"] = lowerLimits
+ggplot(results, aes(Ind,original,predicted,upperP,lowerP))+
+  geom_point(aes(Ind,original),color="red")+
+  geom_point(aes(Ind,predicted),color="blue")+
+  geom_line(aes(Ind,upperP),color="green")+
+  geom_line(aes(Ind,lowerP),color="green")+
+  ggtitle("Prediction band")
+```
+
+
+The cofidence band for parametirc bootstrap is also bumpy.
+
+As the predctions we made in step 2 lie inside the prediction bounds therefore the model in step 2 appears reliable. 
+
+As we can see formm the plot above, the prediction band contains almost all the data except some which is almost 5%.
+
+## Part 5
+
+#### Histogram of residuals
+
+```{r,q37, echo=FALSE, message=FALSE, warning=FALSE}
+hist(resids)
+```
+
+The histograms shows that, parametric booststrap is better than non-parametric bootstraping in this case. Because, as we saw in above graphs, the band for parametric bootstraping does not fit the data well.
+
+
+
+
+# Assignment 4
+
+## 1 Principal Component Analysis
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+NIR_data = read.csv("NIRSpectra.csv", header = TRUE, sep = ';', dec = ',')
+train = NIR_data[,-ncol(NIR_data)]
+train_true = NIR_data[,ncol(NIR_data)]
+NIR_pca = prcomp(train, center = TRUE, scale. = FALSE)
+a = summary(NIR_pca)
+df<- t(as.data.frame(a$importance))
+
+q = sum(NIR_pca$sdev^2)
+q1 = (NIR_pca$sdev^2/q) * 100
+
+plot(q1, xlab = "Principal Component",
+     ylab = "Proportion of Variance Explained",
+     main = "Proportion of Variance Explained By each component",
+     type = "b")
+plot(cumsum(q1), xlab = "Principal Component",
+     ylab = "Proportion of Variance Explained",
+     main = "Cumalative Proportion of Variance Explained By each component",
+     type = "b")
+
+p = 0.9978
+selected_pca = NIR_pca$x[,1:nrow(df[which(df[,"Cumulative Proportion"]<p),])]
+plot(NIR_pca$x[,1], NIR_pca$x[,2], xlab = "Principal Component 1",
+     ylab = "Principal Component 2",
+     main = "Plot of the Two Selected Principal Components")
+```
+
+The first graph shows clearly that the first two principal components explain more than 99% of the total variance of the data, so we selected the first two principal components. We also made a cumalative percentage variance plot for the data and it showed the same thing, the first two components explain more than 99% of the total variance. 
+
+We than made a scatter plot of the two principal components. This plot had most of the components clustered together near the left side of the plot. There are two outliers near the right side of the plot both far apart from each other. These are the unusual diesal fuels according to this plot.
+
+## 2 Principal Component Analysis Loadings
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot(NIR_pca$rotation[,1], xlab = "Original Features",
+     ylab = "Proportion of Variance Explained by Features",
+     main = "Principal Components 1")
+plot(NIR_pca$rotation[,2], xlab = "Original Features",
+     ylab = "Proportion of Variance Explained by Features",
+     main = "Principal Components 2")
+```
+
+These are the trace plots showing how much contribution each of the original features make in the calculation of that principal component. The principal component 2(shown in the second plot) is explained by just a few of the original features. The features from 115 to 123 make majority of the contribution in explaining that feature. 
+
+## 3 Independent Component Analysis using fastICA
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+set.seed(12345)
+a <- fastICA(train, 2, alg.typ = "parallel", fun = "logcosh", alpha = 1,
+             method = "C", row.norm = FALSE, maxit = 200,
+             tol = 0.0001, verbose = TRUE)
+#par(mfrow = c(1, 3))
+#plot(a$X, main = "Pre-processed data")
+#plot(a$X %*% a$K, main = "PCA components")
+
+w_prime=a$K %*% a$W
+
+plot(w_prime[,1], main = "ICA Loadings 1")
+plot(w_prime[,2], main = "ICA Loadings 2")
+
+plot(a$S, main = "ICA components")
+```
+
+Comparing the two trace plots with the ones in the previous step I think that each of the original features contribute more in calculation of the  Independent components. The principal components are switched, like-
+
+- PC1 (using PCA) is similar to PC2 (using ICA), and
+
+- PC2 (unig PCA) is similar to PC1 (using ICA)
+
+They have similar trace plots but the contribution of each of the original component is higher when using Independent Component Analysis.
+
+The last plot is the plot of selected components using ICA. This looks like a mirror image to the one we had in the step 1, as the principal components are switched the plot is also mirrored along the Y-axis. The plot is exactly similar with the same outliers, just mirrored along the Y-axis.
